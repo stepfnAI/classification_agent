@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/stepfnAI/feature_selection_agent"
+Homepage = "git@github.com:stepfnAI/classification_agent.git"
 
 [tool.hatch.build.targets.wheel]
 packages = ["feature_selection_agent"]

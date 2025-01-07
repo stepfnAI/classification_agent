@@ -5,7 +5,7 @@ from sfn_blueprint import Task
 from sfn_blueprint import SFNAIHandler
 import os
 from sfn_blueprint import SFNPromptManager
-from classification_agent.config.model_config import MODEL_CONFIG, DEFAULT_LLM_MODEL
+from classification_agent.config.model_config import MODEL_CONFIG, DEFAULT_LLM_MODEL,DEFAULT_LLM_PROVIDER
 import json
 import numpy as np
 import re
@@ -13,12 +13,12 @@ import re
 class SFNDataSplittingAgent(SFNAgent):
     """Agent responsible for splitting data into train, validation, and inference sets"""
     
-    def __init__(self, llm_provider='openai'):
+    def __init__(self, llm_provider=DEFAULT_LLM_PROVIDER, **kwargs):
         super().__init__(name="Data Splitting", role="Data Splitter")
         self.ai_handler = SFNAIHandler()
         self.llm_provider = llm_provider
         self.model_config = MODEL_CONFIG["data_splitter"]
-        self.validation_window = 3
+        self.validation_window = kwargs.get('validation_window', 3)
         parent_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
         prompt_config_path = os.path.join(parent_path, 'config', 'prompt_config.json')
         self.prompt_manager = SFNPromptManager(prompt_config_path)
@@ -29,34 +29,55 @@ class SFNDataSplittingAgent(SFNAgent):
             raise ValueError("Task data must be a dictionary containing 'df' key")
 
         df = task.data['df']
-        field_mappings = task.data.get('field_mappings', {})
-        target_column = task.data.get('target_column')
-        manual_instructions = task.data.get('manual_instructions')
-
+        date_column = task.data.get('date_column')  # Get the date column from task data
+        
         # Get data info for LLM
-        data_info = self._get_data_info(df, field_mappings, target_column)
+        data_info = {
+            'total_records': len(df),
+            'has_date': date_column is not None,
+            'date_column': date_column,
+            'validation_window': self.validation_window
+        }
         
         # Get splitting code from LLM
-        split_code, explanation = self._get_split_code(data_info, manual_instructions)
+        split_code, explanation = self._get_split_code(data_info)
         
         # Execute the splitting code
         try:
             # Create local copy of dataframe for execution
-            locals_dict = {'df': df.copy(), 'np': np, 'pd': pd}
+            locals_dict = {
+                'df': df.copy(),
+                'np': np,
+                'pd': pd,
+                'date_column': date_column,
+                'validation_window': self.validation_window
+            }
             
             # Execute the code
             exec(split_code, globals(), locals_dict)
             
-            # Get the split datasets
-            splits = {
-                'train': locals_dict['train_df'],
-                'validation': locals_dict['valid_df'],
-                'infer': locals_dict['infer_df'],
-                'message': explanation
+            # Verify the required DataFrames exist
+            required_dfs = ['train_df', 'valid_df', 'infer_df']
+            if not all(df_name in locals_dict for df_name in required_dfs):
+                raise ValueError("Code execution did not produce all required DataFrames")
+            
+            # Get split information
+            split_info = {
+                'train_samples': len(locals_dict['train_df']),
+                'valid_samples': len(locals_dict['valid_df']),
+                'infer_samples': len(locals_dict['infer_df']),
+                'train_start': locals_dict['train_df'][date_column].min() if date_column else None,
+                'train_end': locals_dict['train_df'][date_column].max() if date_column else None,
+                'valid_start': locals_dict['valid_df'][date_column].min() if date_column else None,
+                'valid_end': locals_dict['valid_df'][date_column].max() if date_column else None,
+                'infer_month': locals_dict['infer_df'][date_column].dt.to_period('M').iloc[0] if date_column else None
             }
-            return splits
+            
+            return split_info
             
         except Exception as e:
+            print(f"Error in code execution: {str(e)}")
+            print(f"Generated code:\n{split_code}")
             raise ValueError(f"Error executing splitting code: {str(e)}")
 
     def _get_data_info(self, df: pd.DataFrame, field_mappings: Dict, target_column: str) -> Dict:
@@ -166,3 +187,17 @@ class SFNDataSplittingAgent(SFNAgent):
         infer_df = df.iloc[indices[train_size + valid_size:]]
         """
         return code.strip(), "Performed random split (70-20-10) due to error in custom split" 
+
+    def get_validation_params(self, response, task):
+        """Get parameters for validation"""
+        if not isinstance(task.data, dict) or 'df' not in task.data:
+            raise ValueError("Task data must contain df")
+
+        # Get validation prompts from prompt manager
+        prompts = self.prompt_manager.get_prompt(
+            agent_type='data_splitter',
+            llm_provider=self.llm_provider,
+            prompt_type='validation',
+            actual_output=response
+        )
+        return prompts 

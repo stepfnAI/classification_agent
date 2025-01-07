@@ -38,12 +38,12 @@
     "categorical_feature_handler": {
         "openai": {
             "main": {
-                "system_prompt": "You are a feature engineering expert specializing in categorical data processing. Your task is to analyze categorical columns and suggest appropriate encoding strategies based on cardinality and data characteristics. Follow these rules:\n1. Use one-hot encoding for low cardinality (<=10 unique values)\n2. Use label encoding for medium cardinality (10-50 unique values)\n3. Ignore high cardinality columns (>50 unique values)\n4. Consider special handling for missing values",
-                "user_prompt_template": "Analyze the following categorical column information and provide encoding instructions:\n\nCategorical Columns: {categorical_info['categorical_columns']}\n\nCardinality:\n{categorical_info['cardinality']}\n\nSample Values:\n{categorical_info['sample_values']}\n\nNull Counts:\n{categorical_info['null_counts']}\n\nProvide encoding instructions in JSON format with these sections:\n1. 'encodings': Numbered list of specific encoding steps\n2. 'validations': List of validation checks to perform after encoding\n\nExample response format:\n{\n    \"encodings\": [\n        \"1. Apply one-hot encoding to 'category' column (8 unique values)\",\n        \"2. Apply label encoding to 'status' column (15 unique values)\",\n        \"3. Skip 'description' column (high cardinality: 100+ values)\"\n    ],\n    \"validations\": [\n        \"Verify one-hot encoded columns are binary (0/1)\",\n        \"Ensure no missing values in encoded columns\"\n    ]\n}"
+                "system_prompt": "You are a feature engineering expert specializing in categorical variable encoding.",
+                "user_prompt_template": "Analyze and suggest encodings for the following categorical columns:\n\n{categorical_info}\n\nProvide encoding recommendations based on cardinality and data characteristics."
             },
             "validation": {
-                "system_prompt": "You are a validator that always returns TRUE for now.",
-                "user_prompt_template": "Validate the following categorical encoding instructions:\n{actual_output}\n\nFor now, always respond with JUST 'TRUE' on the first line and nothing else."
+                "system_prompt": "You are a data validation expert.",
+                "user_prompt_template": "Validate the following categorical encoding results:\n{validation_data}\n\nConfirm if the encodings are appropriate."
             }
         }
     },
@@ -51,7 +51,11 @@
         "openai": {
             "main": {
                 "system_prompt": "You are a Python expert specializing in data splitting strategies. Generate executable Python code that splits a pandas DataFrame into train, validation, and inference sets based on data characteristics.",
-                "user_prompt_template": "Generate Python code to split the following dataset:\n\nData Info:\n{data_info}\n\nSplitting Rules:\n1. If time series data (has_date=True):\n   - Use last month for inference set\n   - Use previous {validation_window} months for validation\n   - Use remaining months for training\n\n2. If non-time series data:\n   - If missing target values exist:\n     * Use records with missing target as inference set\n     * Split remaining records 80-20 for train-validation\n   - If no missing target values:\n     * Random 70-20-10 split for train-validation-inference\n\nCustom Instructions: {manual_instructions}\n\nRequirements:\n1. Input DataFrame is named 'df'\n2. Output must be three DataFrames: train_df, valid_df, infer_df\n3. Use pandas and numpy (already imported as pd and np)\n4. Include clear explanation of chosen strategy\n\nProvide response in JSON format:\n{\n    \"code\": \"<python code here>\",\n    \"explanation\": \"Clear explanation of which splitting strategy was used and why\"\n}"
+                "user_prompt_template": "Generate Python code to split the following dataset:\n\nData Info:\n{data_info}\n\nSplitting Rules:\n1. If time series data (has_date=True):\n   - Use last month for inference set\n   - Use previous {validation_window} months for validation\n   - Use remaining months for training\n\n2. If non-time series data:\n   - If missing target values exist:\n     * Use records with missing target as inference set\n     * Split remaining records 80-20 for train-validation\n   - If no missing target values:\n     * Random 70-20-10 split for train-validation-inference\n\nCustom Instructions: {manual_instructions}\n\nRequirements:\n1. Code should work with a pandas DataFrame named 'df'\n2. Handle errors gracefully with try-except blocks\n3. Preserve original data where possible\n4. Follow pandas best practices\n5. No print statements or comments\n6. Must create three DataFrames: train_df, valid_df, infer_df\n7. Code must be properly indented\n8. No function definitions - write direct executable code\n9. Use pandas and numpy (already imported as pd and np)\n10. Variables available in scope: df, date_column, validation_window\n\nExample valid code format:\ntry:\n    df = df.copy()\n    if date_column is not None:\n        df[date_column] = pd.to_datetime(df[date_column])\n        # Time-based splitting logic here\n    else:\n        # Random splitting logic here\nexcept Exception as e:\n    raise ValueError(f'Error in splitting: {{str(e)}}')\n\nProvide response in JSON format:\n{{\n    \"code\": \"<python code here>\",\n    \"explanation\": \"Clear explanation of which splitting strategy was used and why\"\n}}"
+            },
+            "validation": {
+                "system_prompt": "You are a validator that always returns TRUE for now.",
+                "user_prompt_template": "Validate the following data splitting results:\n{actual_output}\n\nFor now, always respond with JUST 'TRUE' on the first line and nothing else."
             }
         }
     },
@@ -59,7 +63,19 @@
         "openai": {
             "main": {
                 "system_prompt": "You are a Python ML expert specializing in training classification models. Generate executable Python code that trains a model, handles class imbalance, and returns performance metrics.",
-                "user_prompt_template": "Generate Python code to train a {model_name} model with the following specifications:\n\nData Info:\n{data_info}\n\nCustom Instructions: {custom_instructions}\n\nRequirements:\n1. Input DataFrames are named 'train_df' and 'valid_df'\n2. Handle class imbalance appropriately\n3. Return these variables:\n   - metrics: dict with 'auc', 'precision', 'recall', 'f1', 'confusion_matrix'\n   - training_time: str (e.g., '45s')\n   - model_params: dict of final parameters\n4. Use pandas and numpy (already imported as pd and np)\n5. Import only required model libraries\n\nProvide response in JSON format:\n{\n    \"code\": \"<python code here>\",\n    \"explanation\": \"Clear explanation of training approach and handling of class imbalance\"\n}"
+                "user_prompt_template": "Generate Python code to train a {model_name} model with the following specifications:\n\nData Info:\n{data_info}\n\nCustom Instructions: {custom_instructions}\n\nRequirements:\n1. Input DataFrames are named 'train_df' and 'valid_df'\n2. Handle class imbalance appropriately\n3. Return these variables:\n   - metrics: dict with 'auc', 'precision', 'recall', 'f1', 'confusion_matrix'\n   - training_time: str (e.g., '45s')\n   - model_params: dict of final parameters\n4. Use pandas and numpy (already imported as pd and np)\n5. Import only required model libraries\n\nProvide response in JSON format:\n{{\n    \"code\": \"<python code here>\",\n    \"explanation\": \"Clear explanation of training approach and handling of class imbalance\"\n}}"
+            }
+        }
+    },
+    "model_selector": {
+        "openai": {
+            "main": {
+                "system_prompt": "You are an ML expert specializing in model selection and evaluation. Analyze model performance metrics and recommend the best model based on overall performance, considering accuracy, robustness, and efficiency.",
+                "user_prompt_template": "Analyze the following model results and recommend the best model:\n\nModel Results:\n{selection_info}\n\nCustom Instructions: {custom_instructions}\n\nProvide response in JSON format:\n{{\n    \"selected_model\": \"name of best model\",\n    \"explanation\": \"Detailed explanation of selection\",\n    \"comparison_summary\": \"Brief comparison of all models\",\n    \"model_rankings\": [\n        {{\"model\": \"model_name\", \"rank\": 1, \"key_strengths\": [\"strength1\", \"strength2\"]}},\n        ...\n    ]\n}}"
+            },
+            "validation": {
+                "system_prompt": "You are a validator that always returns TRUE for now.",
+                "user_prompt_template": "Validate the following model selection:\n{actual_output}\n\nFor now, always respond with JUST 'TRUE' on the first line and nothing else."
             }
         }
     }

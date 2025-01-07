@@ -50,4 +50,24 @@ MODEL_CONFIG["model_trainer"] = {
         "n": 1,
         "stop": None
     }
+}
+
+MODEL_CONFIG["model_selector"] = {
+    "openai": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.3,
+        "max_tokens": 1000,
+        "n": 1,
+        "stop": None
+    }
+}
+
+MODEL_CONFIG["data_splitter"] = {
+    "openai": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "max_tokens": 1000,
+        "n": 1,
+        "stop": None
+    }
 } 

@@ -39,3 +39,16 @@ class StreamlitView(SFNStreamlitView):
         except Exception as e:
             self.show_message(f"Error deleting file: {e}", "error")
         return False 
+
+    def display_radio(self, label: str, options: list, key: str = None) -> str:
+        """Display a radio button group
+        
+        Args:
+            label (str): Label for the radio group
+            options (list): List of options to display
+            key (str): Unique key for the component
+            
+        Returns:
+            str: Selected option
+        """
+        return st.radio(label, options, key=key) 

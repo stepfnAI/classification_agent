@@ -29,7 +29,7 @@ class SFNDataSplittingAgent(SFNAgent):
             raise ValueError("Task data must be a dictionary containing 'df' key")
 
         df = task.data['df']
-        date_column = task.data.get('date_column')  # Get the date column from task data
+        date_column = task.data.get('date_column')
         
         # Get data info for LLM
         data_info = {
@@ -42,7 +42,6 @@ class SFNDataSplittingAgent(SFNAgent):
         # Get splitting code from LLM
         split_code, explanation = self._get_split_code(data_info)
         
-        # Execute the splitting code
         try:
             # Create local copy of dataframe for execution
             locals_dict = {
@@ -70,7 +69,11 @@ class SFNDataSplittingAgent(SFNAgent):
                 'train_end': locals_dict['train_df'][date_column].max() if date_column else None,
                 'valid_start': locals_dict['valid_df'][date_column].min() if date_column else None,
                 'valid_end': locals_dict['valid_df'][date_column].max() if date_column else None,
-                'infer_month': locals_dict['infer_df'][date_column].dt.to_period('M').iloc[0] if date_column else None
+                'infer_month': locals_dict['infer_df'][date_column].dt.to_period('M').iloc[0] if date_column else None,
+                # Add DataFrames to split info
+                'train_df': locals_dict['train_df'],
+                'valid_df': locals_dict['valid_df'],
+                'infer_df': locals_dict['infer_df']
             }
             
             return split_info
@@ -140,7 +143,7 @@ class SFNDataSplittingAgent(SFNAgent):
             configuration=configuration,
             model=provider_config['model']
         )
-        
+        print(">>response_for_debug", response)
         return self._parse_llm_response(response)
 
     def _parse_llm_response(self, response) -> tuple[str, str]:
@@ -157,10 +160,10 @@ class SFNDataSplittingAgent(SFNAgent):
             response_dict = json.loads(content)
             code = response_dict['code']
             explanation = response_dict['explanation']
-            
+            print(">>uncleaned_code_for_debug_code", code)
             # Clean the code
             code = self._clean_code(code)
-            
+            print(">>cleaned_code_for_debug_code", code)
             return code, explanation
             
         except Exception as e:
@@ -170,11 +173,35 @@ class SFNDataSplittingAgent(SFNAgent):
 
     def _clean_code(self, code: str) -> str:
         """Clean the generated code"""
+        # Remove markdown code blocks
         code = re.sub(r'```python\n|```', '', code)
+        
+        # Remove comments and print statements
         code = re.sub(r'print\(.*\)\n?', '', code)
         code = re.sub(r'#.*\n', '', code)
-        code = '\n'.join(line for line in code.split('\n') if line.strip())
-        return code
+        
+        # Split into lines and remove empty lines
+        lines = [line for line in code.split('\n') if line.strip()]
+        
+        # Fix indentation
+        cleaned_lines = []
+        in_try_block = False
+        for line in lines:
+            if line.strip().startswith('try:'):
+                in_try_block = True
+                continue
+            elif line.strip().startswith('except'):
+                in_try_block = False
+                continue
+            
+            # If we're in a try block, remove one level of indentation
+            if in_try_block:
+                # Remove one level of indentation (typically 4 spaces or 1 tab)
+                line = re.sub(r'^    ', '', line)
+            
+            cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines)
 
     def _get_default_split_code(self) -> tuple[str, str]:
         """Return default random split code"""

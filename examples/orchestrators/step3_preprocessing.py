@@ -32,8 +32,7 @@ class FeaturePreprocessing:
                 # Create task for categorical feature analysis
                 task_data = {
                     'df': df,
-                    'mappings': mappings,
-                    'target_col': mappings.get('TARGET')
+                    'mappings': mappings
                 }
                 
                 result = self.categorical_agent.execute_task(Task("Analyze categorical features", data=task_data))

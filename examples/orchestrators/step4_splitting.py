@@ -14,7 +14,8 @@ class DataSplitting:
     # try:
         df = self.session.get('df')
         mappings = self.session.get('field_mappings')
-        date_col = mappings.get('BILLING_DATE')
+        print(f"Available mappings: {mappings}")
+        date_col = mappings.get('date')
         
         if not date_col:
             self.view.show_message("❌ Date column not found in mappings.", "error")

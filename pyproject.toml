@@ -14,7 +14,9 @@ requires-python = ">=3.8"
 
 dependencies = [
     "sfn_blueprint==0.5.1",
-    "sfn-llm-client==0.1.0"
+    "sfn-llm-client==0.1.0",
+    "lightgbm>=4.1.0",
+    "catboost>=1.2.2",
 ]
 
 [project.urls]

@@ -21,9 +21,12 @@ class SFNCategoricalFeatureAgent(SFNAgent):
         
     def execute_task(self, task: Task) -> Dict:
         """Process categorical features based on cardinality"""
+        if not isinstance(task.data, dict):
+            raise ValueError("Task data must be a dictionary")
+        
         df = task.data['df']
         mappings = task.data['mappings']
-        target_col = task.data.get('target_col')
+        target_col = mappings.get('TARGET')
         
         # Make a copy to avoid modifying original
         modified_df = df.copy()
@@ -73,9 +76,15 @@ class SFNCategoricalFeatureAgent(SFNAgent):
         """Identify categorical columns and their properties"""
         categorical_info = {}
         
+        # Get all mapped fields that should be excluded from encoding
+        mapped_fields = set(mappings.values())
+        
         for col in df.columns:
-            # Skip target column and date/ID columns
-            if col == target_col or col in [mappings.get('CUST_ID'), mappings.get('BILLING_DATE')]:
+            # Skip target column, mapped fields, and date/ID columns
+            if (col == target_col or 
+                col in mapped_fields or 
+                col in [mappings.get('CUST_ID'), mappings.get('BILLING_DATE'), 
+                       mappings.get('PRODUCT_ID'), mappings.get('TARGET')]):
                 continue
             
             # Check if column is categorical

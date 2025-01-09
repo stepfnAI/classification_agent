@@ -81,3 +81,9 @@ pip-wheel-metadata/
 # Other
 sample_feature_selection_app.py
 temp.ipynb
+
+# Model files and directories
+models/
+**/models/
+catboost_info/
+**/catboost_info/

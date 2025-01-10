@@ -16,17 +16,14 @@ class DataSplitting:
         mappings = self.session.get('field_mappings')
         print(f"Available mappings: {mappings}")
         date_col = mappings.get('date')
-        
-        if not date_col:
-            self.view.show_message("❌ Date column not found in mappings.", "error")
-            return False
-        
+        print(f">>>>>Date column: {date_col}")
+        print(f">>>>>Mappings: {mappings}")
         with self.view.display_spinner('🤖 AI is determining optimal split...'):
             task = Task("Split data", data={
                 'df': df, 
                 'date_column': date_col,
                 'validation_window': self.validation_window,
-                'mappings': mappings
+                'field_mappings': mappings
             })
             validation_task = Task("Validate data splitting", data={
                 'df': df, 
@@ -71,19 +68,20 @@ class DataSplitting:
         """Display data split information"""
         self.view.display_subheader("Data Split Information")
         
-        # Display date ranges
-        self.view.display_markdown("**Training Period:**")
-        self.view.display_markdown(f"- Start: {split_info['train_start']}")
-        self.view.display_markdown(f"- End: {split_info['train_end']}")
+        # Only display date ranges if date information is available
+        if split_info['train_start'] is not None:
+            self.view.display_markdown("**Training Period:**")
+            self.view.display_markdown(f"- Start: {split_info['train_start']}")
+            self.view.display_markdown(f"- End: {split_info['train_end']}")
+            
+            self.view.display_markdown("**Validation Period:**")
+            self.view.display_markdown(f"- Start: {split_info['valid_start']}")
+            self.view.display_markdown(f"- End: {split_info['valid_end']}")
+            
+            self.view.display_markdown("**Inference Period:**")
+            self.view.display_markdown(f"- Month: {split_info['infer_month']}")
         
-        self.view.display_markdown("**Validation Period:**")
-        self.view.display_markdown(f"- Start: {split_info['valid_start']}")
-        self.view.display_markdown(f"- End: {split_info['valid_end']}")
-        
-        self.view.display_markdown("**Inference Period:**")
-        self.view.display_markdown(f"- Month: {split_info['infer_month']}")
-        
-        # Display sample counts
+        # Display sample counts (always show this)
         self.view.display_markdown("\n**Sample Counts:**")
         self.view.display_markdown(f"- Training: **{split_info['train_samples']}**")
         self.view.display_markdown(f"- Validation: **{split_info['valid_samples']}**")
@@ -92,6 +90,9 @@ class DataSplitting:
     def _save_step_summary(self, split_info):
         """Save step summary for display in completed steps"""
         summary = "✅ Data Splitting Complete:\n"
+        # Add date range info only if available
+        if split_info['train_start'] is not None:
+            summary += f"- Period: {split_info['train_start']} to {split_info['train_end']}\n"
         summary += f"- Training samples: **{split_info['train_samples']}**\n"
         summary += f"- Validation samples: **{split_info['valid_samples']}**\n"
         summary += f"- Inference samples: **{split_info['infer_samples']}**"

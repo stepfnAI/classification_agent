@@ -79,10 +79,34 @@ class DataValidation:
         df = self.session.get('df')
         all_columns = list(df.columns)
         
-        # Format message similar to join agent style
+        # Check for mandatory fields in AI suggestions
+        mandatory_fields = ['target']  # Add other mandatory fields if needed
+        missing_mandatory = [field for field in mandatory_fields 
+                            if field not in suggested_mappings or not suggested_mappings[field]]
+        
+        if missing_mandatory:
+            missing_fields = ', '.join(missing_mandatory)
+            self.view.show_message(
+                f"⚠️ AI couldn't find mapping for mandatory field(s): {missing_fields}. "
+                "Please map these fields manually.",
+                "warning"
+            )
+            # Automatically switch to manual mapping if mandatory fields are missing
+            return self._handle_manual_mapping(all_columns, current_mappings)
+        
+        # Format message with consistent field names
         message = "🎯 AI Suggested Mappings:\n"
+        field_display_names = {
+            "cust_id": "Customer ID",
+            "target": "Target",
+            "revenue": "Revenue",
+            "date": "Date",
+            "prod_id": "Product ID"
+        }
+        
         for field, mapped_col in suggested_mappings.items():
-            message += f"- {field}:  **{mapped_col or 'Not Found'}**\n"
+            display_name = field_display_names.get(field, field)
+            message += f"- {display_name}:  **{mapped_col or 'Not Found'}**\n"
         
         self.view.show_message(message, "info")
         self.view.display_markdown("---")
@@ -108,30 +132,50 @@ class DataValidation:
     
     def _handle_manual_mapping(self, all_columns, current_mappings):
         """Handle manual column mapping selection"""
-        # Required fields
-        required_fields = ["CUST_ID", "BILLING_DATE", "REVENUE"]
-        optional_fields = ["TARGET", "PRODUCT"]
+        # Required fields with standardized names
+        required_fields = ["cust_id", "target", "revenue"]
+        # Changed from product_id to prod_id
+        optional_fields = ["date", "prod_id"]  
         
         modified_mappings = {}
+        suggested_mappings = self.session.get('suggested_mappings', {})
         
         # Handle required fields
         self.view.display_subheader("Required Fields")
+        
+        # Define display names for better UI presentation
+        field_display_names = {
+            "cust_id": "Customer ID",
+            "target": "Target",
+            "revenue": "Revenue",
+            "date": "Date",
+            "prod_id": "Product ID"
+        }
+        
         for field in required_fields:
-            current_value = current_mappings.get(field)
+            current_value = suggested_mappings.get(field) or current_mappings.get(field)
+            default_index = (all_columns.index(current_value) + 1 
+                            if current_value in all_columns 
+                            else 0)
+            
             modified_mappings[field] = self.view.select_box(
-                f"Select column for {field}",
+                f"Select column for {field_display_names[field]}",
                 options=[""] + all_columns,
-                index=all_columns.index(current_value) + 1 if current_value in all_columns else 0
+                index=default_index
             )
         
         # Handle optional fields
         self.view.display_subheader("Optional Fields")
         for field in optional_fields:
-            current_value = current_mappings.get(field)
+            current_value = suggested_mappings.get(field) or current_mappings.get(field)
+            default_index = (all_columns.index(current_value) + 1 
+                            if current_value in all_columns 
+                            else 0)
+            
             value = self.view.select_box(
-                f"Select column for {field} (optional)",
+                f"Select column for {field_display_names[field]} (optional)",
                 options=[""] + all_columns,
-                index=all_columns.index(current_value) + 1 if current_value in all_columns else 0
+                index=default_index
             )
             if value:  # Only add if a column was selected
                 modified_mappings[field] = value
@@ -147,6 +191,7 @@ class DataValidation:
                 )
             else:
                 self.session.set('field_mappings', modified_mappings)
+                print(f">>>>>Field mappings: {modified_mappings}")
                 self.session.set('mapping_complete', True)
                 return True
         
@@ -215,8 +260,17 @@ class DataValidation:
         mappings = self.session.get('field_mappings')
         df = self.session.get('df')
         
+        field_display_names = {
+            "cust_id": "Customer ID",
+            "target": "Target",
+            "revenue": "Revenue",
+            "date": "Date",
+            "prod_id": "Product ID"
+        }
+        
         summary = "✅ Data Validation Complete:\n"
         for field, col in mappings.items():
             dtype = df[col].dtype if col else None
-            summary += f"- {field}: **{col}** ({dtype})\n"
+            display_name = field_display_names.get(field, field)
+            summary += f"- {display_name}: **{col}** ({dtype})\n"
         self.session.set('step_2_summary', summary) 

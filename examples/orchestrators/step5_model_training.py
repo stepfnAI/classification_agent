@@ -18,7 +18,14 @@ class ModelTraining:
         split_info = self.session.get('split_info')
         df = self.session.get('df')
         mappings = self.session.get('field_mappings')
-        print(f"Available mappings for model training: {mappings}")
+        
+        # Add validation for target column
+        target_column = mappings.get('target')
+        if not target_column:
+            self.view.show_message("❌ Target column not found in mappings!", "error")
+            return False
+        
+        print(f"Using target column: {target_column}")  # Debug print
         
         if not split_info:
             self.view.show_message("❌ Data split information not found.", "error")
@@ -91,11 +98,26 @@ class ModelTraining:
         """Display metrics for a trained model"""
         self.view.display_subheader(f"{model_name} Results")
         
-        metrics_text = f"**Metrics:**\n"
-        metrics_text += f"- AUC: {metrics.get('roc_auc', 'N/A'):.3f}\n"
-        metrics_text += f"- F1 Score: {metrics.get('f1', 'N/A'):.3f}\n"
-        metrics_text += f"- Precision: {metrics.get('precision', 'N/A'):.3f}\n"
-        metrics_text += f"- Recall: {metrics.get('recall', 'N/A'):.3f}\n"
+        def format_metric(value):
+            if value is None or value == 'N/A':
+                return 'N/A'
+            try:
+                float_val = float(value)
+                return f"{float_val:.3f}" if float_val != float('inf') else 'N/A'
+            except (ValueError, TypeError):
+                return str(value)
+        
+        metrics_text = "**Metrics:**\n"
+        metrics_to_display = {
+            'AUC': metrics.get('roc_auc'),
+            'F1 Score': metrics.get('f1'),
+            'Precision': metrics.get('precision'),
+            'Recall': metrics.get('recall')
+        }
+        
+        for metric_name, value in metrics_to_display.items():
+            formatted_value = format_metric(value)
+            metrics_text += f"- {metric_name}: {formatted_value}\n"
         
         self.view.show_message(metrics_text, "info")
         
@@ -103,13 +125,27 @@ class ModelTraining:
         """Save step summary for display in completed steps"""
         model_results = self.session.get('model_results', {})
         
+        def format_metric(value):
+            if value is None or value == 'N/A':
+                return 'N/A'
+            try:
+                float_val = float(value)
+                return f"{float_val:.3f}" if float_val != float('inf') else 'N/A'
+            except (ValueError, TypeError):
+                return str(value)
+        
         summary = "✅ Model Training Complete:\n"
         for model_name, results in model_results.items():
             metrics = results.get('metrics', {})
             summary += f"- {model_name}:\n"
-            summary += f"  - AUC: **{metrics.get('roc_auc', 'N/A')}**\n"
-            summary += f"  - F1: **{metrics.get('f1', 'N/A')}**\n"
-            summary += f"  - Precision: **{metrics.get('precision', 'N/A')}**\n"
-            summary += f"  - Recall: **{metrics.get('recall', 'N/A')}**\n"
+            metrics_to_display = {
+                'AUC': metrics.get('roc_auc'),
+                'F1': metrics.get('f1'),
+                'Precision': metrics.get('precision'),
+                'Recall': metrics.get('recall')
+            }
+            for metric_name, value in metrics_to_display.items():
+                formatted_value = format_metric(value)
+                summary += f"  - {metric_name}: **{formatted_value}**\n"
         
         self.session.set('step_5_summary', summary) 

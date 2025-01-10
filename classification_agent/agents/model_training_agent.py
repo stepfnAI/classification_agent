@@ -31,73 +31,129 @@ class SFNModelTrainingAgent(SFNAgent):
     def execute_task(self, task: Task) -> Dict:
         """
         Train a specific model and return metrics and model object
-        
-        :param task: Task object containing:
-            - data: Dict with keys:
-                - df_train: Training DataFrame
-                - df_valid: Validation DataFrame
-                - target_column: str
-                - model_name: str (one of: 'xgboost', 'lightgbm', 'random_forest', 'catboost')
-                - custom_instructions: str or None
-        :return: Dictionary with training results and metrics
         """
         if not isinstance(task.data, dict):
             raise ValueError("Task data must be a dictionary")
-            
+        
         required_keys = ['df_train', 'df_valid', 'target_column', 'model_name']
         if not all(key in task.data for key in required_keys):
             raise ValueError(f"Task data must contain: {required_keys}")
+        
+        target_column = task.data.get('target_column')
+        if not target_column:
+            raise ValueError("Target column is not defined")
+        if target_column not in task.data['df_train'].columns:
+            raise ValueError(f"Target column '{target_column}' not found in training data")
 
         # Get training code from LLM
         training_code, explanation = self._get_training_code(task.data)
         
+        # Add debug print for cleaned code
+        print(">>> Generated Training Code:")
+        print(training_code)
+        print(">>> End Training Code")
+        
         # Get target column from task data
-        target_column = task.data['target_column']
+        target_column = task.data.get('target_column')
         
-        # Create namespace for execution
-        globals_dict = {
-            'train_df': task.data['df_train'].copy(),
-            'valid_df': task.data['df_valid'].copy(),
-            'target_column': target_column,
-            'pd': pd,
-            'np': np,
-            'XGBClassifier': XGBClassifier,
-            'LGBMClassifier': LGBMClassifier,
-            'RandomForestClassifier': RandomForestClassifier,
-            'CatBoostClassifier': CatBoostClassifier,
-            'roc_auc_score': roc_auc_score,
-            'precision_score': precision_score,
-            'recall_score': recall_score,
-            'f1_score': f1_score,
-            'confusion_matrix': confusion_matrix
-        }
-        
-        # Execute with globals_dict
-        exec(training_code, globals_dict, globals_dict)
-        
-        # Get results from namespace
-        metrics = globals_dict.get('metrics', {
-            'error': 'Metrics not created',
-            'roc_auc': None,
-            'precision': None,
-            'recall': None,
-            'f1': None,
-            'confusion_matrix': None
-        })
-        
-        # Get the trained model object and training features
-        model = globals_dict.get('model', None)
-        training_features = globals_dict.get('training_features', [])
-        
-        if not model or not metrics:
-            raise ValueError("Code execution failed to produce required outputs")
-        
-        return {
-            'metrics': metrics,
-            'model': model,
-            'training_features': training_features  # Add training features to return dict
-        }
+        try:
+            # Safely filter out records with null target values
+            train_df = task.data['df_train'].copy()
+            valid_df = task.data['df_valid'].copy()
             
+            if target_column is None or target_column not in train_df.columns:
+                print(f"Warning: Target column '{target_column}' not found. Using all records.")
+                train_df_filtered = train_df
+                valid_df_filtered = valid_df
+            else:
+                # Handle different types of null values
+                train_mask = (pd.notna(train_df[target_column]) & 
+                             (train_df[target_column] != '') & 
+                             (train_df[target_column] != 'None') & 
+                             (train_df[target_column].astype(str) != 'nan'))
+                valid_mask = (pd.notna(valid_df[target_column]) & 
+                             (valid_df[target_column] != '') & 
+                             (valid_df[target_column] != 'None') & 
+                             (valid_df[target_column].astype(str) != 'nan'))
+                
+                train_df_filtered = train_df[train_mask].copy()
+                valid_df_filtered = valid_df[valid_mask].copy()
+            
+            if len(train_df_filtered) == 0 or len(valid_df_filtered) == 0:
+                print("Warning: No valid records found after filtering. Using original data.")
+                train_df_filtered = train_df
+                valid_df_filtered = valid_df
+            
+            # Create namespace for execution
+            globals_dict = {
+                'train_df': train_df_filtered,
+                'valid_df': valid_df_filtered,
+                'target_column': target_column,
+                'pd': pd,
+                'np': np,
+                'XGBClassifier': XGBClassifier,
+                'LGBMClassifier': LGBMClassifier,
+                'RandomForestClassifier': RandomForestClassifier,
+                'CatBoostClassifier': CatBoostClassifier,
+                'roc_auc_score': roc_auc_score,
+                'precision_score': precision_score,
+                'recall_score': recall_score,
+                'f1_score': f1_score,
+                'confusion_matrix': confusion_matrix
+            }
+            
+            # Execute with globals_dict
+            exec(training_code, globals_dict, globals_dict)
+            
+            # Get results from namespace with fallback values
+            metrics = globals_dict.get('metrics', {
+                'error': 'Metrics not created',
+                'roc_auc': None,
+                'precision': None,
+                'recall': None,
+                'f1': None,
+                'confusion_matrix': None
+            })
+            
+            # Get the trained model object and training features
+            model = globals_dict.get('model', None)
+            training_features = globals_dict.get('training_features', [])
+            
+            if not model:
+                raise ValueError("Code execution failed to produce model")
+            
+            return {
+                'metrics': metrics,
+                'model': model,
+                'training_features': training_features,
+                'records_info': {
+                    'total_train': len(task.data['df_train']),
+                    'used_train': len(train_df_filtered),
+                    'total_valid': len(task.data['df_valid']),
+                    'used_valid': len(valid_df_filtered)
+                }
+            }
+        except Exception as e:
+            print(f"Warning: Error during model training: {str(e)}")
+            # Return minimal valid response
+            return {
+                'metrics': {
+                    'error': f'Training failed: {str(e)}',
+                    'roc_auc': None,
+                    'precision': None,
+                    'recall': None,
+                    'f1': None,
+                    'confusion_matrix': None
+                },
+                'model': None,
+                'training_features': [],
+                'records_info': {
+                    'total_train': len(task.data['df_train']),
+                    'used_train': 0,
+                    'total_valid': len(task.data['df_valid']),
+                    'used_valid': 0
+                }
+            }
 
     def _get_training_code(self, data: Dict) -> tuple[str, str]:
         """Get Python code for model training from LLM"""
@@ -127,23 +183,83 @@ class SFNModelTrainingAgent(SFNAgent):
         return self._parse_llm_response(response)
 
     def _get_data_info(self, data: Dict) -> Dict:
-        """Gather information about the datasets"""
+        """Gather information about the datasets with fallback to minimal info"""
         train_df = data['df_train']
         valid_df = data['df_valid']
-        target_col = data['target_column']
+        target_col = data.get('target_column')
         
-        return {
-            'train_shape': train_df.shape,
-            'valid_shape': valid_df.shape,
-            'target_distribution_train': train_df[target_col].value_counts().to_dict(),
-            'target_distribution_valid': valid_df[target_col].value_counts().to_dict(),
-            'features': [col for col in train_df.columns if col != target_col],
-            'dtypes': train_df.dtypes.to_dict(),
-            'column_mappings': {
-                'target_column': target_col,
-                'date_column': 'billing_date',
+        try:
+            # Create copies to avoid modifying original data
+            train_df = train_df.copy()
+            valid_df = valid_df.copy()
+            
+            # Handle different types of null values in target column
+            train_mask = pd.notna(train_df[target_col]) & (train_df[target_col] != '') & (train_df[target_col] != 'None')
+            valid_mask = pd.notna(valid_df[target_col]) & (valid_df[target_col] != '') & (valid_df[target_col] != 'None')
+            
+            train_df_with_target = train_df[train_mask]
+            valid_df_with_target = valid_df[valid_mask]
+            
+            # Safely compute target distribution with fallback
+            try:
+                train_dist = (train_df_with_target[target_col]
+                             .fillna('Unknown')
+                             .value_counts()
+                             .to_dict())
+                valid_dist = (valid_df_with_target[target_col]
+                             .fillna('Unknown')
+                             .value_counts()
+                             .to_dict())
+            except:
+                # Fallback for target distribution
+                train_dist = {'Unknown': len(train_df_with_target)}
+                valid_dist = {'Unknown': len(valid_df_with_target)}
+            
+            # Get feature list excluding target column
+            features = [col for col in train_df.columns if col != target_col]
+            
+            # Get dtypes safely with fallback
+            try:
+                dtypes_dict = {str(k): str(v) for k, v in train_df.dtypes.to_dict().items()}
+            except:
+                # Fallback for dtypes
+                dtypes_dict = {col: 'unknown' for col in train_df.columns}
+            
+            return {
+                'train_shape': train_df_with_target.shape,
+                'valid_shape': valid_df_with_target.shape,
+                'target_distribution_train': train_dist,
+                'target_distribution_valid': valid_dist,
+                'features': features,
+                'dtypes': dtypes_dict,
+                'column_mappings': {
+                    'target_column': target_col,
+                    'date_column': data.get('date_column', None),
+                },
+                'excluded_records': {
+                    'train': len(train_df) - len(train_df_with_target),
+                    'valid': len(valid_df) - len(valid_df_with_target)
+                }
             }
-        }
+        except Exception as e:
+            print(f"Warning: Using minimal data info due to error: {str(e)}")
+            # Return minimal data info that won't break the flow
+            return {
+                'train_shape': train_df.shape,
+                'valid_shape': valid_df.shape,
+                'target_distribution_train': {'Unknown': len(train_df)},
+                'target_distribution_valid': {'Unknown': len(valid_df)},
+                'features': [col for col in train_df.columns if col != target_col],
+                'dtypes': {col: 'unknown' for col in train_df.columns},
+                'column_mappings': {
+                    'target_column': target_col,
+                    'date_column': None
+                },
+                'excluded_records': {
+                    'train': 0,
+                    'valid': 0
+                }
+            }
 
     def _get_llm_response(self, system_prompt: str, user_prompt: str):
         """Get response from LLM"""

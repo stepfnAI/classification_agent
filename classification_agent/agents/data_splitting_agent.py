@@ -9,6 +9,7 @@ from classification_agent.config.model_config import MODEL_CONFIG, DEFAULT_LLM_M
 import json
 import numpy as np
 import re
+from sklearn.model_selection import train_test_split
 
 class SFNDataSplittingAgent(SFNAgent):
     """Agent responsible for splitting data into train, validation, and inference sets"""
@@ -29,25 +30,27 @@ class SFNDataSplittingAgent(SFNAgent):
             raise ValueError("Task data must be a dictionary containing 'df' key")
 
         df = task.data['df']
-        date_column = task.data.get('date_column')
+        field_mappings = task.data.get('field_mappings', {})
+        target_column = field_mappings.get('target')
+        date_column = field_mappings.get('date')
         
-        # Get data info for LLM
-        data_info = {
-            'total_records': len(df),
-            'has_date': date_column is not None,
-            'date_column': date_column,
-            'validation_window': self.validation_window
-        }
-        
-        # Get splitting code from LLM
-        split_code, explanation = self._get_split_code(data_info)
+        # Get splitting code from LLM with direct variable passing
+        split_code, explanation = self._get_split_code(
+            total_records=str(len(df)),
+            columns=', '.join(df.columns.tolist()),
+            field_mappings=str(field_mappings),
+            target_column=str(target_column),
+            date_column=str(date_column),
+            validation_window=self.validation_window
+        )
         
         try:
-            # Create local copy of dataframe for execution
+            # Create local copy of dataframe for execution with all necessary imports
             locals_dict = {
                 'df': df.copy(),
                 'np': np,
                 'pd': pd,
+                'train_test_split': train_test_split,
                 'date_column': date_column,
                 'validation_window': self.validation_window
             }
@@ -108,15 +111,24 @@ class SFNDataSplittingAgent(SFNAgent):
                 
         return info
 
-    def _get_split_code(self, data_info: Dict, manual_instructions: str = None) -> tuple[str, str]:
+    def _get_split_code(self, total_records, columns, field_mappings, target_column, date_column, validation_window) -> tuple[str, str]:
         """Get Python code for splitting from LLM"""
+        print(f"1>>>>>Total records: {total_records}")
+        print(f"1>>>>>Columns: {columns}")
+        print(f"1>>>>>Field mappings: {field_mappings}")
+        print(f"1>>>>>Target column: {target_column}")
+        print(f"1>>>>>Date column: {date_column}")
+        print(f"1>>>>>Validation window: {validation_window}")
         system_prompt, user_prompt = self.prompt_manager.get_prompt(
             agent_type='data_splitter',
             llm_provider=self.llm_provider,
             prompt_type='main',
-            data_info=data_info,
-            validation_window=self.validation_window,
-            manual_instructions=manual_instructions or "None provided"
+            total_records=total_records,
+            columns=columns,
+            field_mappings=field_mappings,
+            target_column=target_column,
+            date_column=date_column,
+            validation_window=validation_window
         )
 
         provider_config = self.model_config.get(self.llm_provider, {
@@ -178,7 +190,7 @@ class SFNDataSplittingAgent(SFNAgent):
         
         # Remove comments and print statements
         code = re.sub(r'print\(.*\)\n?', '', code)
-        code = re.sub(r'#.*\n', '', code)
+        # code = re.sub(r'#.*\n', '', code)
         
         # Split into lines and remove empty lines
         lines = [line for line in code.split('\n') if line.strip()]

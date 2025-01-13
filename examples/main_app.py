@@ -57,7 +57,6 @@ class ClassificationApp:
         # Execute current step
         if current_step in self.orchestrators:
             self.view.display_markdown("---")
-            
             result = self.orchestrators[current_step].execute()
             
             # Only advance if not the final step

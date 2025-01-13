@@ -52,3 +52,24 @@ class StreamlitView(SFNStreamlitView):
             str: Selected option
         """
         return st.radio(label, options, key=key) 
+
+    def text_area(self, label: str, value: str = "", height: int = None, help: str = None, key: str = None) -> str:
+        """Display a multi-line text input widget
+        
+        Args:
+            label (str): Label for the text area
+            value (str, optional): Default text value. Defaults to "".
+            height (int, optional): Height of the text area in pixels. Defaults to None.
+            help (str, optional): Tooltip help text. Defaults to None.
+            key (str, optional): Unique key for the component. Defaults to None.
+            
+        Returns:
+            str: Text entered by the user
+        """
+        return st.text_area(
+            label=label,
+            value=value,
+            height=height,
+            help=help,
+            key=key
+        ) 

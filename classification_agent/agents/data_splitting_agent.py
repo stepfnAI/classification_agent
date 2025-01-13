@@ -20,6 +20,7 @@ class SFNDataSplittingAgent(SFNAgent):
         self.llm_provider = llm_provider
         self.model_config = MODEL_CONFIG["data_splitter"]
         self.validation_window = kwargs.get('validation_window', 3)
+        self.max_retries = kwargs.get('max_retries', 3)
         parent_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
         prompt_config_path = os.path.join(parent_path, 'config', 'prompt_config.json')
         self.prompt_manager = SFNPromptManager(prompt_config_path)
@@ -33,58 +34,81 @@ class SFNDataSplittingAgent(SFNAgent):
         field_mappings = task.data.get('field_mappings', {})
         target_column = field_mappings.get('target')
         date_column = field_mappings.get('date')
+        user_instructions = task.data.get('user_instructions', '')  # Get user instructions
         
-        # Get splitting code from LLM with direct variable passing
-        split_code, explanation = self._get_split_code(
-            total_records=str(len(df)),
-            columns=', '.join(df.columns.tolist()),
-            field_mappings=str(field_mappings),
-            target_column=str(target_column),
-            date_column=str(date_column),
-            validation_window=self.validation_window
-        )
-        
-        try:
-            # Create local copy of dataframe for execution with all necessary imports
-            locals_dict = {
-                'df': df.copy(),
-                'np': np,
-                'pd': pd,
-                'train_test_split': train_test_split,
-                'date_column': date_column,
-                'validation_window': self.validation_window
-            }
-            
-            # Execute the code
-            exec(split_code, globals(), locals_dict)
-            
-            # Verify the required DataFrames exist
-            required_dfs = ['train_df', 'valid_df', 'infer_df']
-            if not all(df_name in locals_dict for df_name in required_dfs):
-                raise ValueError("Code execution did not produce all required DataFrames")
-            
-            # Get split information
-            split_info = {
-                'train_samples': len(locals_dict['train_df']),
-                'valid_samples': len(locals_dict['valid_df']),
-                'infer_samples': len(locals_dict['infer_df']),
-                'train_start': locals_dict['train_df'][date_column].min() if date_column else None,
-                'train_end': locals_dict['train_df'][date_column].max() if date_column else None,
-                'valid_start': locals_dict['valid_df'][date_column].min() if date_column else None,
-                'valid_end': locals_dict['valid_df'][date_column].max() if date_column else None,
-                'infer_month': locals_dict['infer_df'][date_column].dt.to_period('M').iloc[0] if date_column else None,
-                # Add DataFrames to split info
-                'train_df': locals_dict['train_df'],
-                'valid_df': locals_dict['valid_df'],
-                'infer_df': locals_dict['infer_df']
-            }
-            
-            return split_info
-            
-        except Exception as e:
-            print(f"Error in code execution: {str(e)}")
-            print(f"Generated code:\n{split_code}")
-            raise ValueError(f"Error executing splitting code: {str(e)}")
+        last_error = None
+        for attempt in range(self.max_retries):
+            try:
+                if last_error:
+                    print(f">>>>>> Retry attempt {attempt + 1}/{self.max_retries}. Previous error: {str(last_error)}")
+
+                split_code, explanation = self._get_split_code(
+                    total_records=str(len(df)),
+                    columns=', '.join(df.columns.tolist()),
+                    field_mappings=str(field_mappings),
+                    target_column=str(target_column),
+                    date_column=str(date_column),
+                    validation_window=self.validation_window,
+                    user_instructions=user_instructions,
+                    previous_error=str(last_error) if last_error else None,
+                    attempt=attempt + 1
+                )
+
+                # Create local copy of dataframe for execution with all necessary imports
+                locals_dict = {
+                    'df': df.copy(),
+                    'np': np,
+                    'pd': pd,
+                    'train_test_split': train_test_split,
+                    'date_column': date_column,
+                    'validation_window': self.validation_window
+                }
+                
+                # Execute the code
+                exec(split_code, globals(), locals_dict)
+                
+                # Verify the required DataFrames exist
+                required_dfs = ['train_df', 'valid_df', 'infer_df']
+                if not all(df_name in locals_dict for df_name in required_dfs):
+                    raise ValueError("Code execution did not produce all required DataFrames")
+                
+                # Get split information
+                split_info = {
+                    'train_samples': len(locals_dict['train_df']),
+                    'valid_samples': len(locals_dict['valid_df']),
+                    'infer_samples': len(locals_dict['infer_df']),
+                    'train_start': locals_dict['train_df'][date_column].min() if date_column else None,
+                    'train_end': locals_dict['train_df'][date_column].max() if date_column else None,
+                    'valid_start': locals_dict['valid_df'][date_column].min() if date_column else None,
+                    'valid_end': locals_dict['valid_df'][date_column].max() if date_column else None,
+                    'infer_month': locals_dict['infer_df'][date_column].dt.to_period('M').iloc[0] if date_column else None,
+                    # Add DataFrames to split info
+                    'train_df': locals_dict['train_df'],
+                    'valid_df': locals_dict['valid_df'],
+                    'infer_df': locals_dict['infer_df'],
+                    # Add explanation to split info
+                    'explanation': explanation
+                }
+                
+                print(f">>>>>> Successfully split data on attempt {attempt + 1}")
+                return split_info
+
+            except Exception as e:
+                last_error = e
+                if attempt == self.max_retries - 1:
+                    # If all retries failed, use default split
+                    default_code, default_explanation = self._get_default_split_code()
+                    try:
+                        exec(default_code, globals(), locals_dict)
+                        print(">>>>>> Successfully split data using default split after all retries failed")
+                        return {
+                            'train_df': locals_dict['train_df'],
+                            'valid_df': locals_dict['valid_df'],
+                            'infer_df': locals_dict['infer_df'],
+                            'explanation': default_explanation
+                        }
+                    except Exception as default_error:
+                        raise ValueError(f"Both custom and default splits failed. Last error: {str(default_error)}")
 
     def _get_data_info(self, df: pd.DataFrame, field_mappings: Dict, target_column: str) -> Dict:
         """Gather information about the dataset for LLM"""
@@ -111,7 +135,9 @@ class SFNDataSplittingAgent(SFNAgent):
                 
         return info
 
-    def _get_split_code(self, total_records, columns, field_mappings, target_column, date_column, validation_window) -> tuple[str, str]:
+    def _get_split_code(self, total_records, columns, field_mappings, target_column, 
+                       date_column, validation_window, user_instructions, 
+                       previous_error=None, attempt=1) -> tuple[str, str]:
         """Get Python code for splitting from LLM"""
         print(f"1>>>>>Total records: {total_records}")
         print(f"1>>>>>Columns: {columns}")
@@ -128,8 +154,12 @@ class SFNDataSplittingAgent(SFNAgent):
             field_mappings=field_mappings,
             target_column=target_column,
             date_column=date_column,
-            validation_window=validation_window
+            validation_window=validation_window,
+            user_instructions=user_instructions
         )
+
+        if previous_error and attempt > 1:
+            user_prompt += f"\n\nPrevious attempt {attempt-1} failed with error:\n{previous_error}\nPlease adjust the code to handle this error."
 
         provider_config = self.model_config.get(self.llm_provider, {
             "model": DEFAULT_LLM_MODEL,

@@ -30,7 +30,6 @@ If you're using macOS, you'll need to install OpenMP support for XGBoost:
 ```bash
 brew install libomp
 ```
-If you encounter XGBoost-related errors and cannot install libomp, please check your package manager setup or consider using alternative models like LightGBM or CatBoost.
 
 ### Installation
 

@@ -24,34 +24,28 @@ An AI-powered classification agent that automates the end-to-end process of buil
 - Python 3.8+
 - OpenAI API key
 
+#### macOS Users
+If you're using macOS, you'll need to install OpenMP support for XGBoost:
+
+```bash
+brew install libomp
+```
+If you encounter XGBoost-related errors and cannot install libomp, please check your package manager setup or consider using alternative models like LightGBM or CatBoost.
+
 ### Installation
 
 1. Clone the repository:
 
-```bash
+```
 git clone git@github.com:stepfnAI/classification_agent.git
 cd classification_agent
 ```
 
-2. Create and activate a virtual environment:
-```bash
-virtualenv venv
-source venv/bin/activate # Linux/Mac
-OR
-.\venv\Scripts\activate # Windows
+2. Install the dependencies:
+
 ```
-
-3. Install the package:
-```bash
-pip install -e .
+pip install -r requirements.txt
 ```
-
-
-4. Set up your OpenAI API key:
-```bash
-export OPENAI_API_KEY='your_openai_api_key'
-```
-
 
 ### Running the Application
 

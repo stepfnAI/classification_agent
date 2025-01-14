@@ -24,12 +24,26 @@ An AI-powered classification agent that automates the end-to-end process of buil
 - Python 3.8-3.11
 - OpenAI API key
 
-#### macOS Users
-If you're using macOS, you'll need to install OpenMP support for XGBoost:
+### Platform-Specific Requirements
+
+#### macOS
+If you're using macOS, you'll need to install OpenMP support:
 
 ```bash
 brew install libomp
 ```
+
+#### Ubuntu/Debian
+Install OpenMP support using:
+
+```
+bash
+sudo apt-get install libomp-dev
+```
+
+#### Windows
+No additional steps required - OpenMP support is included with the standard installation.
+
 
 ### Installation
 
@@ -145,5 +159,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📧 Contact
 puneet@stepfunction.ai
-
-

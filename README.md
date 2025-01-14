@@ -40,10 +40,25 @@ git clone git@github.com:stepfnAI/classification_agent.git
 cd classification_agent
 ```
 
-2. Install the dependencies:
+2. Create and activate a virtual environment:
 
+```bash
+pip install virtualenv                # Install virtualenv if not already installed
+virtualenv venv                       # Create virtual environment
+source venv/bin/activate             # Linux/Mac
+# OR
+.\venv\Scripts\activate               # Windows
 ```
-pip install -e . 
+
+3. Install dependencies:
+```bash
+pip install -e .
+```
+
+4. Set up your OpenAI API key:
+
+```bash
+export OPENAI_API_KEY='your_openai_api_key'
 ```
 
 ### Running the Application
@@ -107,7 +122,6 @@ streamlit run examples/main_app.py
 - sfn-llm-client==0.1.0
 - lightgbm>=4.1.0
 - catboost>=1.2.2
-- streamlit
 
 ## 🔒 Security
 
@@ -131,7 +145,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 5. Open a Pull Request
 
 ## 📧 Contact
+puneet@stepfunction.ai
 
-StepFN AI
-
-Project Link: [https://github.com/stepfnAI/classification_agent](https://github.com/stepfnAI/classification_agent)

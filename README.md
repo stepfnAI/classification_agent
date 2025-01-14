@@ -21,7 +21,7 @@ An AI-powered classification agent that automates the end-to-end process of buil
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.8-3.11
 - OpenAI API key
 
 #### macOS Users
@@ -35,8 +35,7 @@ brew install libomp
 
 1. Clone the repository:
 
-```
-git clone git@github.com:stepfnAI/classification_agent.git
+```git clone git@github.com:stepfnAI/classification_agent.git
 cd classification_agent
 ```
 
@@ -118,7 +117,7 @@ streamlit run examples/main_app.py
 
 ## 📦 Dependencies
 
-- sfn_blueprint==0.5.1
+- sfn_blueprint==0.5.2
 - sfn-llm-client==0.1.0
 - lightgbm>=4.1.0
 - catboost>=1.2.2
@@ -146,4 +145,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📧 Contact
 puneet@stepfunction.ai
+
 

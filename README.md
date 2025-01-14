@@ -43,7 +43,7 @@ cd classification_agent
 2. Install the dependencies:
 
 ```
-pip install -r requirements.txt
+pip install -e . 
 ```
 
 ### Running the Application

@@ -73,3 +73,44 @@ class StreamlitView(SFNStreamlitView):
             help=help,
             key=key
         ) 
+
+    def multiselect(self, label: str, options: List[Any], default: Optional[List[Any]] = None, key: Optional[str] = None) -> List[Any]:
+        """Display a multi-select widget
+        
+        Args:
+            label (str): Label for the multi-select
+            options (List[Any]): List of options to choose from
+            default (List[Any], optional): Default selected values. Defaults to None.
+            key (str, optional): Unique key for the component. Defaults to None.
+            
+        Returns:
+            List[Any]: List of selected options
+        """
+        return st.multiselect(
+            label=label,
+            options=options,
+            default=default,
+            key=key
+        ) 
+
+    def create_columns(self, ratios: List[int]) -> tuple:
+        """Create columns with specified width ratios
+        
+        Args:
+            ratios (List[int]): List of relative widths for columns
+            
+        Returns:
+            tuple: Tuple of column objects
+        """
+        return st.columns(ratios)
+
+    def get_column(self, index: int):
+        """Get a specific column
+        
+        Args:
+            index (int): Index of the column to get
+            
+        Returns:
+            streamlit.delta_generator.DeltaGenerator: Column object
+        """
+        return self.columns[index] 

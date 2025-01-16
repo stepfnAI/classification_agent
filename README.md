@@ -1,9 +1,10 @@
 # Classification Agent
 
-An AI-powered classification agent that automates the end-to-end process of building and selecting classification models, with interactive capabilities and comprehensive model analysis.
+An AI-powered classification agent that automates the end-to-end process of building and selecting binary classification models, with interactive capabilities and comprehensive model analysis.
 
 ## 🌟 Features
 
+- **Binary Classification Support**: Currently optimized for binary classification problems only
 - **Intelligent Data Processing**: Automatically handles data preprocessing and validation
 - **Smart Feature Engineering**: AI-powered categorical feature handling and encoding
 - **Automated Model Pipeline**:

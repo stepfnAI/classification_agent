@@ -21,7 +21,7 @@ An AI-powered classification agent that automates the end-to-end process of buil
 
 ### Prerequisites
 
-- Python 3.8-3.11
+- Python 3.9-3.11
 - OpenAI API key
 
 ### Platform-Specific Requirements

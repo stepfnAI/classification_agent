@@ -10,7 +10,7 @@ authors = [
 ]
 description = "An AI-powered feature selection agent for automated data analysis and feature selection"
 readme = "README.md"
-requires-python = ">=3.8, <3.12"
+requires-python = ">=3.9, <3.12"
 
 dependencies = [
     "sfn_blueprint==0.5.2",

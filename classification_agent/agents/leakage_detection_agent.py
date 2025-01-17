@@ -1,24 +1,18 @@
-from typing import Dict, List
+from typing import Dict
 import pandas as pd
 import numpy as np
-from scipy import stats
-from sfn_blueprint import SFNAgent, Task, SFNAIHandler, SFNPromptManager
-import os
-from classification_agent.config.model_config import MODEL_CONFIG, DEFAULT_LLM_MODEL
-import json
+from sfn_blueprint import SFNAgent, Task
 
 class SFNLeakageDetectionAgent(SFNAgent):
     """Agent responsible for detecting potential target leakage in features"""
     
-    def __init__(self, llm_provider='openai'):
+    def __init__(self):
         super().__init__(name="Leakage Detection", role="Data Validator")
-        self.ai_handler = SFNAIHandler()
-        self.llm_provider = llm_provider
-        self.model_config = MODEL_CONFIG["leakage_detector"]
-        parent_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
-        prompt_config_path = os.path.join(parent_path, 'config', 'prompt_config.json')
-        self.prompt_manager = SFNPromptManager(prompt_config_path)
-        self.CORRELATION_THRESHOLD = 0.95
+        # Thresholds for leakage detection
+        self.SEVERE_CORRELATION_THRESHOLD = 0.95  # Definite leakage
+        self.HIGH_CORRELATION_THRESHOLD = 0.90    # Suspicious, needs review
+        self.HIGH_NULL_PERCENTAGE = 0.30          # High missing values threshold
+        self.HIGH_CARDINALITY_RATIO = 0.90       # High unique values ratio
         
     def execute_task(self, task: Task) -> Dict:
         """Analyze features for potential target leakage"""
@@ -28,108 +22,98 @@ class SFNLeakageDetectionAgent(SFNAgent):
         df = task.data['df']
         target_col = task.data['target_column']
         
-        # Get comprehensive statistical analysis
-        statistical_findings = self._get_statistical_findings(df, target_col)
-        
-        # Get LLM analysis
-        leakage_analysis = self._analyze_leakage(
-            statistical_findings=statistical_findings,
-            field_mappings=task.data['field_mappings']
-        )
-        
-        return leakage_analysis
+        return self._analyze_leakage(df, target_col)
 
-    def _get_statistical_findings(self, df: pd.DataFrame, target_col: str) -> Dict:
-        """Calculate comprehensive statistical metrics for leakage detection"""
+    def _analyze_leakage(self, df: pd.DataFrame, target_col: str) -> Dict:
+        """Analyze features for leakage based on correlation, nulls, and cardinality"""
         findings = {
-            'correlations': {},
-            'unique_value_counts': {},
-            'perfect_predictors': [],
-            'near_perfect_predictors': [],
-            'high_cardinality_features': [],
-            'target_statistics': {},
-            'temporal_indicators': {}
+            'severe_leakage': [],      # Features with correlation > 0.95
+            'suspicious_leakage': [],   # Features with correlation 0.90-0.95
+            'analysis': {},            # Detailed analysis per feature
+            'recommendations': {
+                'remove': [],          # Features to definitely remove
+                'review': []           # Features to review
+            }
         }
         
-        # Basic target statistics
-        findings['target_statistics'] = {
-            'unique_values': df[target_col].nunique(),
-            'null_count': df[target_col].isnull().sum(),
-            'value_distribution': df[target_col].value_counts(normalize=True).to_dict()
-        }
-
         for column in df.columns:
             if column == target_col:
                 continue
                 
-            # 1. Calculate correlations based on data type
+            analysis = {}
+            
+            # 1. Correlation Check
             correlation = self._calculate_correlation(df[column], df[target_col])
-            findings['correlations'][column] = correlation
+            analysis['correlation'] = correlation
             
-            # 2. Get unique value counts and cardinality metrics
-            unique_count = df[column].nunique()
-            null_count = df[column].isnull().sum()
-            findings['unique_value_counts'][column] = {
-                'unique_count': unique_count,
-                'null_count': null_count,
-                'cardinality_ratio': unique_count / len(df) if len(df) > 0 else 0
-            }
+            # 2. Missing Values Check
+            null_percentage = df[column].isnull().mean()
+            analysis['null_percentage'] = null_percentage
             
-            # 3. Check for perfect/near-perfect predictors
-            if abs(correlation) > self.CORRELATION_THRESHOLD:
-                if abs(correlation) > 0.99:
-                    findings['perfect_predictors'].append(column)
-                else:
-                    findings['near_perfect_predictors'].append(column)
+            # 3. Cardinality Check
+            unique_ratio = df[column].nunique() / len(df)
+            analysis['unique_ratio'] = unique_ratio
             
-            # 4. Identify high cardinality features
-            if findings['unique_value_counts'][column]['cardinality_ratio'] > 0.9:
-                findings['high_cardinality_features'].append(column)
+            # Store detailed analysis
+            findings['analysis'][column] = analysis
             
-            # 5. Check for potential temporal indicators
-            if pd.api.types.is_datetime64_any_dtype(df[column]):
-                findings['temporal_indicators'][column] = {
-                    'is_monotonic': df[column].is_monotonic,
-                    'missing_timestamps': null_count,
-                    'date_range': {
-                        'start': df[column].min().strftime('%Y-%m-%d') if not pd.isna(df[column].min()) else None,
-                        'end': df[column].max().strftime('%Y-%m-%d') if not pd.isna(df[column].max()) else None
-                    }
-                }
+            # Evaluate leakage based on all factors
+            if abs(correlation) > self.SEVERE_CORRELATION_THRESHOLD:
+                findings['severe_leakage'].append(column)
+                findings['recommendations']['remove'].append({
+                    'feature': column,
+                    'reason': f"Very high correlation ({correlation:.3f}) with target"
+                })
             
-            # 6. Additional statistical measures
-            if pd.api.types.is_numeric_dtype(df[column]):
-                findings['correlations'][f"{column}_stats"] = {
-                    'mean': df[column].mean(),
-                    'std': df[column].std(),
-                    'skewness': df[column].skew(),
-                    'unique_ratio': unique_count / len(df)
-                }
-
+            elif abs(correlation) > self.HIGH_CORRELATION_THRESHOLD:
+                findings['suspicious_leakage'].append(column)
+                findings['recommendations']['review'].append({
+                    'feature': column,
+                    'reason': (
+                        f"High correlation ({correlation:.3f}) with target. "
+                        f"Null%: {null_percentage:.1%}, "
+                        f"Unique ratio: {unique_ratio:.2f}"
+                    )
+                })
+            
+            # Additional suspicious patterns
+            elif (null_percentage > self.HIGH_NULL_PERCENTAGE and 
+                  abs(correlation) > 0.85):  # High correlation despite many nulls
+                findings['recommendations']['review'].append({
+                    'feature': column,
+                    'reason': (
+                        f"High correlation ({correlation:.3f}) despite "
+                        f"high null percentage ({null_percentage:.1%})"
+                    )
+                })
+            
+            elif (unique_ratio > self.HIGH_CARDINALITY_RATIO and 
+                  abs(correlation) > 0.85):  # High correlation with high cardinality
+                findings['recommendations']['review'].append({
+                    'feature': column,
+                    'reason': (
+                        f"High correlation ({correlation:.3f}) with "
+                        f"high cardinality ratio ({unique_ratio:.2f})"
+                    )
+                })
+        
         return findings
 
     def _calculate_correlation(self, series1: pd.Series, series2: pd.Series) -> float:
-        """
-        Calculate correlation between two series handling different data types
-        Returns correlation coefficient between -1 and 1
-        """
+        """Calculate correlation between two series handling different data types"""
         try:
-            # For numeric data, use standard correlation
+            # For numeric data
             if pd.api.types.is_numeric_dtype(series1) and pd.api.types.is_numeric_dtype(series2):
                 return series1.corr(series2)
             
-            # For categorical data, use Cramer's V
+            # For categorical data, convert to numeric if possible
             elif pd.api.types.is_categorical_dtype(series1) or pd.api.types.is_categorical_dtype(series2):
-                contingency = pd.crosstab(series1, series2)
-                chi2 = stats.chi2_contingency(contingency)[0]
-                n = contingency.sum().sum()
-                min_dim = min(contingency.shape) - 1
-                cramer_v = np.sqrt(chi2 / (n * min_dim)) if min_dim > 0 else 0
-                return cramer_v
-            
-            # For datetime, convert to ordinal and calculate correlation
-            elif pd.api.types.is_datetime64_any_dtype(series1):
-                return series1.map(pd.Timestamp.toordinal).corr(series2)
+                try:
+                    return pd.to_numeric(series1, errors='coerce').corr(
+                        pd.to_numeric(series2, errors='coerce')
+                    )
+                except:
+                    return 0.0
             
             # For other types, try to convert to numeric
             else:
@@ -142,112 +126,4 @@ class SFNLeakageDetectionAgent(SFNAgent):
                     
         except Exception as e:
             print(f"Error calculating correlation: {str(e)}")
-            return 0.0
-
-    def _analyze_leakage(self, statistical_findings: Dict, field_mappings: Dict) -> Dict:
-        """Get LLM analysis of potential leakage"""
-        system_prompt, user_prompt = self.prompt_manager.get_prompt(
-            agent_type='leakage_detector',
-            llm_provider=self.llm_provider,
-            prompt_type='main',
-            statistical_findings=statistical_findings,
-            field_mappings=field_mappings
-        )
-
-        provider_config = self.model_config.get(self.llm_provider, {
-            "model": DEFAULT_LLM_MODEL,
-            "temperature": 0.3,
-            "max_tokens": 500,
-            "n": 1,
-            "stop": None
-        })
-        
-        configuration = {
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "temperature": provider_config["temperature"],
-            "max_tokens": provider_config["max_tokens"],
-            "n": provider_config["n"],
-            "stop": provider_config["stop"]
-        }
-
-        response, _ = self.ai_handler.route_to(
-            llm_provider=self.llm_provider,
-            configuration=configuration,
-            model=provider_config['model']
-        )
-        
-        try:
-            # Extract content from response based on response type
-            if isinstance(response, dict):
-                content = response['choices'][0]['message']['content']
-            elif hasattr(response, 'choices'):
-                content = response.choices[0].message.content
-            else:
-                content = response
-            
-            # Parse LLM analysis
-            llm_analysis = json.loads(content)
-            
-            # Combine statistical findings with LLM insights
-            return {
-                'flagged_features': statistical_findings['perfect_predictors'] + 
-                                  statistical_findings['near_perfect_predictors'],
-                'explanations': {
-                    'perfect_predictors': statistical_findings['perfect_predictors'],
-                    'near_perfect': statistical_findings['near_perfect_predictors'],
-                    'high_cardinality': statistical_findings['high_cardinality_features'],
-                    'temporal_indicators': statistical_findings['temporal_indicators'],
-                    'llm_insights': llm_analysis.get('insights', {}),  # LLM's additional insights
-                    'reasoning': llm_analysis.get('reasoning', {})     # LLM's reasoning
-                },
-                'recommendations': {
-                    'remove': statistical_findings['perfect_predictors'],
-                    'review': statistical_findings['near_perfect_predictors'] + 
-                             llm_analysis.get('additional_review', []),  # LLM's suggestions
-                    'monitor': statistical_findings['high_cardinality_features'],
-                    'llm_suggestions': llm_analysis.get('recommendations', {})  # LLM's recommendations
-                }
-            }
-        except Exception as e:
-            print(f"Error parsing LLM response: {str(e)}")
-            # Fallback to statistical findings only
-            return {
-                'flagged_features': statistical_findings['perfect_predictors'] + 
-                                  statistical_findings['near_perfect_predictors'],
-                'explanations': {
-                    'perfect_predictors': statistical_findings['perfect_predictors'],
-                    'near_perfect': statistical_findings['near_perfect_predictors'],
-                    'high_cardinality': statistical_findings['high_cardinality_features'],
-                    'temporal_indicators': statistical_findings['temporal_indicators']
-                },
-                'recommendations': {
-                    'remove': statistical_findings['perfect_predictors'],
-                    'review': statistical_findings['near_perfect_predictors'],
-                    'monitor': statistical_findings['high_cardinality_features']
-                }
-            }
-
-    def get_validation_params(self, response, task):
-        """
-        Get parameters for validation
-        :param response: The response from execute_task to validate
-        :param task: The validation task containing the analysis data
-        :return: Dictionary with validation parameters
-        """
-        if not isinstance(task.data.get('df'), pd.DataFrame):
-            raise ValueError("Task data must contain a pandas DataFrame under 'df' key")
-
-        prompts = self.prompt_manager.get_prompt(
-            agent_type='leakage_detector',
-            llm_provider=self.llm_provider,
-            prompt_type='validation',
-            actual_output=response,
-            statistical_findings=self._get_statistical_findings(
-                task.data['df'], 
-                task.data['target_column']
-            )
-        )
-        return prompts 
+            return 0.0 

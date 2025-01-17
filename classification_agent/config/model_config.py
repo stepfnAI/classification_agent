@@ -70,4 +70,14 @@ MODEL_CONFIG["data_splitter"] = {
         "n": 1,
         "stop": None
     }
+}
+
+MODEL_CONFIG["leakage_detector"] = {
+    "openai": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "max_tokens": 1000,
+        "n": 1,
+        "stop": None
+    }
 } 

@@ -5,14 +5,16 @@ from sfn_blueprint import Task
 from sfn_blueprint import SFNAIHandler
 import os
 from sfn_blueprint import SFNPromptManager
-from classification_agent.config.model_config import MODEL_CONFIG, DEFAULT_LLM_MODEL
+from classification_agent.config.model_config import MODEL_CONFIG, DEFAULT_LLM_MODEL, DEFAULT_LLM_PROVIDER
 import json
 
 class SFNMappingAgent(SFNAgent):
     """Agent responsible for mapping critical fields for classification tasks"""
     
-    def __init__(self, llm_provider='openai'):
-        super().__init__(name="Field Mapping", role="Field Identifier")
+    def __init__(self, llm_provider=DEFAULT_LLM_PROVIDER):
+        super().__init__(name="Field Mapper", role="Data Analyst")
+        if not os.getenv('OPENAI_API_KEY'):
+            os.environ['OPENAI_API_KEY'] = "your-api-key-here"  # Set this to your actual key
         self.ai_handler = SFNAIHandler()
         self.llm_provider = llm_provider
         self.model_config = MODEL_CONFIG["mapping_agent"]

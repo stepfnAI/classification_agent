@@ -46,69 +46,59 @@ class FeaturePreprocessing:
                     Task("Detect target leakage", data=task_data)
                 )
             
-            # Display findings
-            self.view.display_subheader("🎯 Target Leakage Analysis")
-            
-            # Handle severe leakage features (correlation > 0.95)
+            # Get all features that need attention
             severe_features = leakage_analysis['severe_leakage']
-            if severe_features:
-                self.view.show_message(
-                    "⚠️ High-Risk Features Detected (Recommended for Removal):", 
-                    "warning"
-                )
-                for rec in leakage_analysis['recommendations']['remove']:
-                    self.view.show_message(
-                        f"- **{rec['feature']}**\n  {rec['reason']}",
-                        "warning"
-                    )
+            review_features = [rec['feature'] for rec in leakage_analysis['recommendations']['review']]
+            
+            if severe_features or review_features:
+                warning_msg = "⚠️ Target Leakage Analysis:\n\n"
                 
-                # Let user choose which features to remove
+                # Add high-risk features with details
+                if severe_features:
+                    warning_msg += f"{len(severe_features)} High-risk features detected ⚠️\n"
+                    for rec in leakage_analysis['recommendations']['remove']:
+                        warning_msg += f"- {rec['feature']}: {rec['reason']}\n"
+                    warning_msg += "\n"
+                
+                # Add potential concern features with details
+                if review_features:
+                    warning_msg += f"{len(review_features)} Features with potential concerns detected ℹ️\n"
+                    for rec in leakage_analysis['recommendations']['review']:
+                        warning_msg += f"- {rec['feature']}: {rec['reason']}\n"
+                
+                self.view.show_message(warning_msg, "error")
+                
+                # Get mapped columns to exclude from selection
+                mapped_columns = set(mappings.values())
+                
+                # Filter out mapped columns from available features
+                available_features = [col for col in df.columns if col not in mapped_columns]
+                default_selected = [f for f in (severe_features + review_features) if f not in mapped_columns]
+                
+                # Let user choose features to remove with all flagged features pre-selected
                 features_to_remove = self.view.multiselect(
-                    "Select features to remove due to target leakage:",
-                    severe_features
+                    "Select features to remove (high-risk and potential concern features are pre-selected):",
+                    options=available_features,
+                    default=default_selected
                 )
                 
-                if features_to_remove:
-                    # Store removed features in session
-                    self.session.set('removed_features', features_to_remove)
-                    # Remove selected features from DataFrame
-                    df = df.drop(columns=features_to_remove)
-                    self.session.set('df', df)
-                    
-                    self.view.show_message(
-                        f"✅ Removed {len(features_to_remove)} features with severe target leakage",
-                        "success"
-                    )
+                if self.view.display_button("Confirm Feature Removal"):
+                    if features_to_remove:
+                        # Store removed features in session
+                        self.session.set('removed_features', features_to_remove)
+                        # Remove selected features from DataFrame
+                        df = df.drop(columns=features_to_remove)
+                        self.session.set('df', df)
+                        
+                        self.view.show_message(
+                            f"✅ Removed {len(features_to_remove)} features",
+                            "success"
+                        )
+                    return True
+                return False
             else:
-                self.view.show_message("✅ No severe target leakage detected", "success")
-            
-            # Handle suspicious features (correlation 0.90-0.95 or other concerns)
-            review_features = leakage_analysis['recommendations']['review']
-            if review_features:
-                self.view.show_message(
-                    "ℹ️ Features to Review (Potential Concerns):", 
-                    "info"
-                )
-                for rec in review_features:
-                    self.view.show_message(
-                        f"- **{rec['feature']}**\n  {rec['reason']}",
-                        "info"
-                    )
-            
-            # Display detailed analysis if requested
-            if self.view.display_button("Show Detailed Analysis"):
-                analysis_msg = "\n📊 Detailed Feature Analysis:\n"
-                for feature, metrics in leakage_analysis['analysis'].items():
-                    analysis_msg += (
-                        f"\n**{feature}**:\n"
-                        f"- Correlation: {metrics['correlation']:.3f}\n"
-                        f"- Missing Values: {metrics['null_percentage']:.1%}\n"
-                        f"- Unique Ratio: {metrics['unique_ratio']:.2f}\n"
-                    )
-                self.view.show_message(analysis_msg, "info")
-            
-            self.session.set('leakage_detection_complete', True)
-            return True
+                self.view.show_message("✅ No target leakage detected", "success")
+                return True
             
         except Exception as e:
             self.view.show_message(f"Error in leakage detection: {str(e)}", "error")

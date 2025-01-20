@@ -10,7 +10,7 @@ class SFNLeakageDetectionAgent(SFNAgent):
         super().__init__(name="Leakage Detection", role="Data Validator")
         # Thresholds for leakage detection
         self.SEVERE_CORRELATION_THRESHOLD = 0.95  # Definite leakage
-        self.HIGH_CORRELATION_THRESHOLD = 0.90    # Suspicious, needs review
+        self.HIGH_CORRELATION_THRESHOLD = 0.85    # Suspicious, needs review
         self.HIGH_NULL_PERCENTAGE = 0.30          # High missing values threshold
         self.HIGH_CARDINALITY_RATIO = 0.90       # High unique values ratio
         

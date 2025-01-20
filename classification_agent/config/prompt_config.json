@@ -82,5 +82,17 @@
                 "user_prompt_template": "Validate the following model selection:\n{actual_output}\n\nFor now, always respond with JUST 'TRUE' on the first line and nothing else."
             }
         }
+    },
+    "leakage_detector": {
+        "openai": {
+            "main": {
+                "system_prompt": "You are a data scientist expert in identifying target leakage in machine learning features. Analyze the statistical findings and provide insights in a structured JSON format.",
+                "user_prompt_template": "Analyze the following statistical findings for potential target leakage:\n\nStatistical Metrics:\n{statistical_findings}\n\nField Information:\n{field_mappings}\n\nProvide your analysis in JSON format with the following structure:\n{{\n    \"insights\": {{\n        \"feature_name\": \"detailed explanation\",\n        ...\n    }},\n    \"reasoning\": {{\n        \"feature_name\": \"reasoning for flagging\",\n        ...\n    }},\n    \"additional_review\": [\"feature1\", \"feature2\"],\n    \"recommendations\": {{\n        \"high_risk\": [\"feature1\"],\n        \"medium_risk\": [\"feature2\"],\n        \"low_risk\": [\"feature3\"]\n    }}\n}}"
+            },
+            "validation": {
+                "system_prompt": "You are a validator that always returns TRUE for now.",
+                "user_prompt_template": "Validate the following leakage detection results:\n{actual_output}\n\nFor now, always respond with JUST 'TRUE' on the first line and nothing else."
+            }
+        }
     }
 } 

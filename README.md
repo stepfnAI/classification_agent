@@ -19,7 +19,6 @@ An AI-powered classification agent that automates the end-to-end process of buil
 - **Interactive Interface**: Review and modify AI suggestions at each step
 - **Flexible Data Input**: Supports various data formats
 - **Visual Progress Tracking**: Clear feedback on each step
-- **Model Export**: Save and download trained models
 
 ## 🚀 Getting Started
 

@@ -6,7 +6,10 @@ An AI-powered classification agent that automates the end-to-end process of buil
 
 - **Binary Classification Support**: Currently optimized for binary classification problems only
 - **Intelligent Data Processing**: Automatically handles data preprocessing and validation
-- **Smart Feature Engineering**: AI-powered categorical feature handling and encoding
+- **Smart Feature Engineering**: 
+  - AI-powered categorical feature handling and encoding
+  - Automated target leakage detection and mitigation
+  - Interactive feature selection and removal
 - **Automated Model Pipeline**:
   - Data validation and cleaning
   - Feature preprocessing
@@ -16,7 +19,6 @@ An AI-powered classification agent that automates the end-to-end process of buil
 - **Interactive Interface**: Review and modify AI suggestions at each step
 - **Flexible Data Input**: Supports various data formats
 - **Visual Progress Tracking**: Clear feedback on each step
-- **Model Export**: Save and download trained models
 
 ## 🚀 Getting Started
 

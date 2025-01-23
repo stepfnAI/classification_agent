@@ -50,7 +50,8 @@ No additional steps required - OpenMP support is included with the standard inst
 
 1. Clone the repository:
 
-```git clone git@github.com:stepfnAI/classification_agent.git
+```
+git clone git@github.com:stepfnAI/classification_agent.git
 cd classification_agent
 ```
 
